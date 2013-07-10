@@ -135,12 +135,12 @@ def describe_class(cls,output,level=1):
         argdesc.append('**'+argdesc)
     if argdesc:
       if len(indent) < 4:
-        output.append(indent+'*%s*(%s):' % (format_sym(sym),','.join(argdesc)))
+        output.append(indent+'**%s(%s)**:' % (format_sym(sym),','.join(argdesc)))
       else:
         output.append(indent+'%s(%s): ' % (sym,','.join(argdesc)))
     else:
       if len(indent) < 4:
-        output.append(indent+'*%s* = %s' % (format_sym(sym),describe(attr)))
+        output.append(indent+'**%s** = %s' % (format_sym(sym),describe(attr)))
       else:
         output.append(indent+'%s(%s): ' % (sym,','.join(argdesc)))
     if doc:
