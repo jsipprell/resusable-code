@@ -42,24 +42,24 @@ Observable
 (*class*)
 See the observer module documentation.
 
-    make_observable(cls,othermeta):
-    Creates a new metaclass that can used to automatically subclass an existing metaclass
-    and thus allow *some* existing metaclass semantics to work while still making classes and
-    object observer compatible.
+  make_observable(cls,othermeta):
+  Creates a new metaclass that can used to automatically subclass an existing metaclass
+  and thus allow *some* existing metaclass semantics to work while still making classes and
+  object observer compatible.
 
-    Note that there is no gaurantee this will operate as expected, it depends on what the subclassed
-    metaclasses actually do.
+  Note that there is no gaurantee this will operate as expected, it depends on what the subclassed
+  metaclasses actually do.
 
-    Usage:
+  Usage:
 
-        import observer
+      import observer
 
-        class Foo(object):
-          __metaclass__ = observer.make_observable(other_metaclass)
+      class Foo(object):
+        __metaclass__ = observer.make_observable(other_metaclass)
 
-          ...
+        ...
 
-    __init__(cls,name,bases,dct):
+  __init__(cls,name,bases,dct):
 
 add\_observer
 ============
@@ -145,9 +145,9 @@ Creates an observable property. These act just like normal properties, including
 being usable for both getting (singular usage) and optionally setting and deleting
 but they notify any registered observers when get, set or delete happens.
 
-    deleter(self,func):
-    setter(self,func):
-    __init__(self,fget=None,fset=None,fdel=None,doc=None):
+  deleter(self,func):
+  setter(self,func):
+  __init__(self,fget=None,fset=None,fdel=None,doc=None):
 
 remove\_all\_observers
 ====================

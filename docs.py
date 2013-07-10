@@ -107,7 +107,7 @@ def describe_short(ob,indent=''):
 
 def describe_class(cls,output,level=1):
   argdesc = []
-  indent = ' ' * (4*level)
+  indent = ' ' * (2*level)
   start = len(output)
   for sym in sorted(dir(cls),sort_symbol):
     attr = getattr(cls,sym,None)
