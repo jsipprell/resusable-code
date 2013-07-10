@@ -25,24 +25,25 @@ observation rather than the observers). This should be used in conjuction with t
 
 Usage:
 
-    from observer import Observable,observed
-    class Foo(object):
-      __metaclass__ = Observable
+```python
+from observer import Observable,observed
+class Foo(object):
+  __metaclass__ = Observable
 
-      @observed
-      def foo(self): return self._foo
+  @observed
+  def foo(self): return self._foo
 
-      @foo.setter
-      def foo(self,value): self._foo = value
+  @foo.setter
+  def foo(self,value): self._foo = value
 
-      @foo.deleter
-      def foo(self): del self._foo
-
+  @foo.deleter
+  def foo(self): del self._foo
+```
 See [add_observer](#add_observer) for the observer (client) side of things.
-Observable
-==========
-(*class*)
-See the observer module documentation.
+#### Observable
+> class
+
+> See the observer module documentation.
 
   **make\_observable(cls,othermeta)**:
   Creates a new metaclass that can used to automatically subclass an existing metaclass
@@ -54,21 +55,22 @@ See the observer module documentation.
 
   Usage:
 
-      import observer
+  ```python
+  import observer
 
-      class Foo(object):
-        __metaclass__ = observer.make_observable(other_metaclass)
+  class Foo(object):
+    __metaclass__ = observer.make_observable(other_metaclass)
 
-        ...
-
+    ...
+  ```
   **\_\_init\_\_(cls,name,bases,dct)**:
 
 
-add\_observer
-============
-(*function*)
-Register a function, method or any python callable to be called when a specific
-property in an object is accessed, either via a get, a set or a delete.
+#### add\_observer
+> function
+
+> Register a function, method or any python callable to be called when a specific
+> property in an object is accessed, either via a get, a set or a delete.
 
 The object registered against (`ob`) can be one of three things:
 
@@ -109,8 +111,8 @@ will remove all registered observers (optionally filtered by type) in this set.
 If the keyword argument `use_thread` evaluates to True, callbacks will always be called
 in a separate thread.
 
-**Callback Order**
-==================
+## Callback Order
+
 
 Order of observation callbacks is arbitrary and undefined. There is **no guarantee** that
 the original observed object's property methods will have been called either before or after
@@ -122,31 +124,33 @@ called before or after another observer callback. This is true with or without t
 Observer callbacks must not alter the value in any fashion. Their return values are silently
 discarded.
 
-make\_observable
-===============
-(*method*)
-Creates a new metaclass that can used to automatically subclass an existing metaclass
-and thus allow *some* existing metaclass semantics to work while still making classes and
-object observer compatible.
+#### make\_observable
+> method
+
+> Creates a new metaclass that can used to automatically subclass an existing metaclass
+> and thus allow *some* existing metaclass semantics to work while still making classes and
+> object observer compatible.
 
 Note that there is no gaurantee this will operate as expected, it depends on what the subclassed
 metaclasses actually do.
 
 Usage:
 
-    import observer
+```python
+import observer
 
-    class Foo(object):
-      __metaclass__ = observer.make_observable(other_metaclass)
+class Foo(object):
+  __metaclass__ = observer.make_observable(other_metaclass)
 
-      ...
+  ...
+```
 
-observed
-========
-(*class*)
-Creates an observable property. These act just like normal properties, including
-being usable for both getting (singular usage) and optionally setting and deleting
-but they notify any registered observers when get, set or delete happens.
+#### observed
+> class
+
+> Creates an observable property. These act just like normal properties, including
+> being usable for both getting (singular usage) and optionally setting and deleting
+> but they notify any registered observers when get, set or delete happens.
 
   **deleter(self,func)**:
 
@@ -155,12 +159,12 @@ but they notify any registered observers when get, set or delete happens.
   **\_\_init\_\_(self,fget=None,fset=None,fdel=None,doc=None)**:
 
 
-remove\_all\_observers
-====================
-(*function*)
-Removes all observers registered under `name` (the name keyword argument to
-*add_observer()*.  Anonymous observers (those registered without a name) cannot
-be removed.
+#### remove\_all\_observers
+> function
+
+> Removes all observers registered under `name` (the name keyword argument to
+> `add_observer()`.  Anonymous observers (those registered without a name) cannot
+> be removed.
 
 To remove only observer of a specific type, pass _get_,_set_, or _del_ in the type
 keyword argument. If `type` is _ALL_ (the default), then all types will be removed.
