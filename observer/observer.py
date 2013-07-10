@@ -23,7 +23,7 @@ observation rather than the observers). This should be used in conjuction with t
 
 Usage:
 
-    ```from observer import Observable,observed
+    from observer import Observable,observed
     class Foo(object):
       __metaclass__ = Observable
 
@@ -34,7 +34,7 @@ Usage:
       def foo(self,value): self._foo = value
 
       @foo.deleter
-      def foo(self): del self._foo```
+      def foo(self): del self._foo
 
 See **register_observer** for the observer (client) side of things.
 '''
@@ -239,12 +239,12 @@ class Observable(type):
 
     Usage:
 
-        ```import observer
+        import observer
 
         class Foo(object):
           __metaclass__ = observer.make_observable(other_metaclass)
 
-          ...```
+          ...
     '''
     return type(othermeta.__name__,(othermeta,cls),{})
 make_observable = Observable.make_observable

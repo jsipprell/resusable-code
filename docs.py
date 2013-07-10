@@ -123,7 +123,7 @@ def describe_class(cls,output,level=1):
     if inspect.ismethod(attr) or inspect.isfunction(attr):
       args,vargs,varkw,defaults = inspect.getargspec(attr)
       defaults = list(defaults or ())
-      argdesc.extend(format_sym(a) for a in args)
+      argdesc.extend(args)
       i = len(argdesc)-1
       while defaults:
         argdesc[i] += ('=%r' % defaults.pop(-1))
@@ -134,9 +134,9 @@ def describe_class(cls,output,level=1):
       if varkw:
         argdesc.append('**'+argdesc)
     if argdesc:
-      output.append(indent+'**%s**(%s):' % (format_sym(sym),','.join(argdesc)))
+      output.append(indent+'%s(%s):' % (sym,','.join(argdesc)))
     else:
-      output.append(indent+'**%s** = %s' % (format_sym(sym),describe(attr)))
+      output.append(indent+'%s = %s' % (sym,describe(attr)))
     if doc:
       output.extend(doc_strip(doc,indent))
   return len(output) - start
@@ -166,16 +166,18 @@ def dump_docs(dir,doc='README.md',modules=None):
         exports = get_exports(m)
 
       if getattr(m,'__doc__',None):
-        output.extend(doc_strip(m.__doc__,''))
+        output.extend(l.rstrip() for l in m.__doc__.splitlines())
       for symbol in sorted(exports.keys(),sort_symbol):
         ob = exports[symbol]
         if getattr(ob,'__doc__',None):
-          output.append('**%s**' % format_sym(symbol))
-          output.append('=' * (len(symbol)+4))
-          output.append('(_%s_)' % describe_short(ob))
+          output.append('%s' % format_sym(symbol))
+          output.append('=' * len(symbol))
+          output.append('(*%s*)' % describe_short(ob))
           output.extend(doc_strip(ob.__doc__,''))
+          if output[-1]:
+            output.append('')
         else:
-          output.append('**%s**: %s' % (format_sym(symbol),ob))
+          output.append('%s: %s' % (format_sym(symbol),ob))
         if inspect.isclass(ob):
           if describe_class(ob,output,1):
             output.append('')
