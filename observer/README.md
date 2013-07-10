@@ -42,7 +42,7 @@ Observable
 (*class*)
 See the observer module documentation.
 
-  make_observable(cls,othermeta):
+  *make\_observable*(cls,othermeta):
   Creates a new metaclass that can used to automatically subclass an existing metaclass
   and thus allow *some* existing metaclass semantics to work while still making classes and
   object observer compatible.
@@ -59,7 +59,7 @@ See the observer module documentation.
 
         ...
 
-  __init__(cls,name,bases,dct):
+  *\_\_init\_\_*(cls,name,bases,dct):
 
 add\_observer
 ============
@@ -145,9 +145,9 @@ Creates an observable property. These act just like normal properties, including
 being usable for both getting (singular usage) and optionally setting and deleting
 but they notify any registered observers when get, set or delete happens.
 
-  deleter(self,func):
-  setter(self,func):
-  __init__(self,fget=None,fset=None,fdel=None,doc=None):
+  *deleter*(self,func):
+  *setter*(self,func):
+  *\_\_init\_\_*(self,fget=None,fset=None,fdel=None,doc=None):
 
 remove\_all\_observers
 ====================
