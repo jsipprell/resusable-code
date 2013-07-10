@@ -5,7 +5,7 @@ README.md file.
 
 DIRECTORIES = ['observer']
 
-import sys,os,os.path,importlib,glob
+import sys,re,os,os.path,inspect,types,importlib,glob
 from contextlib import contextmanager,closing
 
 @contextmanager
@@ -37,6 +37,30 @@ def sort_symbol(a,b):
     return -1
   return cmp(a,b)
 
+def doc_strip(doc,indent):
+  lines = [l.rstrip() for l in doc.splitlines()]
+  # first line may not be indented.
+  min_indent = 0
+  for l in lines:
+    if l and l[0].isspace():
+      i = len(l) - len(l.lstrip())
+      if i and (min_indent == 0 or i < min_indent):
+        min_indent = i
+
+  for i,l in enumerate(lines):
+    if l:
+      length = len(l) - len(l.lstrip())
+      if length < min_indent:
+        lines[i] = indent + l.strip()
+      else:
+        lines[i] = indent + l[min_indent:]
+        #l = (' ' * min_indent) + l.strip()
+      #elif length > min_indent:
+      #  l = l[min_indent:]
+      #lines[i] = indent + l[min_indent:]
+
+  return lines
+
 def get_exports(module):
   exports = dict()
   for sym,ob in module.__dict__.items():
@@ -47,6 +71,75 @@ def get_exports(module):
       continue
     exports[sym] = ob
   return exports
+
+def format_sym(sym):
+  return sym.replace('_',r'''\_''')
+
+def describe(ob,indent=''):
+  if inspect.ismethod(ob):
+    return indent+format_sym(ob.__name__)
+  elif inspect.isfunction(ob):
+    return indent+'function '+format_sym(ob.func_name)
+  elif inspect.ismodule(ob):
+    return indent+'module '+format_sym(ob.__name__)
+  elif inspect.isclass(ob):
+    return indent+'Class '+format_sym(ob.__name__)
+  elif isinstance(ob,basestring):
+    return indent+repr(ob)
+  return indent+'<Instance of Class %s>' % format_sym(type(ob).__name__)
+
+def describe_short(ob,indent=''):
+  if inspect.ismethod(ob):
+    return indent+'method'
+  elif inspect.isfunction(ob):
+    return indent+'function'
+  elif inspect.ismodule(ob):
+    return indent+'module'
+  elif inspect.isclass(ob):
+    return indent+'class'
+  elif isinstance(ob,basestring):
+    return indent+'string'
+  elif ob is True or ob is False:
+    return indent+str(ob)
+  elif isinstance(ob,int):
+    return indent+'integer'
+  return indent+'object'
+
+def describe_class(cls,output,level=1):
+  argdesc = []
+  indent = ' ' * (4*level)
+  start = len(output)
+  for sym in sorted(dir(cls),sort_symbol):
+    attr = getattr(cls,sym,None)
+    if attr is None: continue
+    doc = getattr(attr,'__doc__',None)
+    if sym.startswith('_') and not doc and sym != '__init__':
+      continue
+    elif sym not in cls.__dict__ and sym != '__init__':
+      continue
+    elif sym in ('__doc__','__module__','__name__','__weakref__'):
+      continue
+    del argdesc[::]
+    if inspect.ismethod(attr) or inspect.isfunction(attr):
+      args,vargs,varkw,defaults = inspect.getargspec(attr)
+      defaults = list(defaults or ())
+      argdesc.extend(format_sym(a) for a in args)
+      i = len(argdesc)-1
+      while defaults:
+        argdesc[i] += ('=%r' % defaults.pop(-1))
+        i -= 1
+
+      if vargs:
+        argdesc.append('*'+vargs)
+      if varkw:
+        argdesc.append('**'+argdesc)
+    if argdesc:
+      output.append(indent+'**%s**(%s):' % (format_sym(sym),','.join(argdesc)))
+    else:
+      output.append(indent+'**%s** = %s' % (format_sym(sym),describe(attr)))
+    if doc:
+      output.extend(doc_strip(doc,indent))
+  return len(output) - start
 
 def dump_docs(dir,doc='README.md',modules=None):
   output = []
@@ -73,17 +166,19 @@ def dump_docs(dir,doc='README.md',modules=None):
         exports = get_exports(m)
 
       if getattr(m,'__doc__',None):
-        output.extend(m.__doc__.splitlines())
+        output.extend(doc_strip(m.__doc__,''))
       for symbol in sorted(exports.keys(),sort_symbol):
         ob = exports[symbol]
         if getattr(ob,'__doc__',None):
-          output.append('**%s**' % symbol)
+          output.append('**%s**' % format_sym(symbol))
           output.append('=' * (len(symbol)+4))
-          output.append('*(%s)*' % ob)
-          output.extend(ob.__doc__.splitlines())
-          output.append('')
+          output.append('(_%s_)' % describe_short(ob))
+          output.extend(doc_strip(ob.__doc__,''))
         else:
-          output.append('**%s**: %s' % (symbol,ob))
+          output.append('**%s**: %s' % (format_sym(symbol),ob))
+        if inspect.isclass(ob):
+          if describe_class(ob,output,1):
+            output.append('')
       exports.clear()
 
     with file(doc,'w') as f:
@@ -92,5 +187,5 @@ def dump_docs(dir,doc='README.md',modules=None):
 
 if __name__ == '__main__':
   os.chdir(os.path.abspath(os.path.dirname(sys.argv[0])))
-  for dir in DIRECTORIES: dump_docs(dir)
+  for d in DIRECTORIES: dump_docs(d)
 
