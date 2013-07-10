@@ -36,7 +36,7 @@ Usage:
       @foo.deleter
       def foo(self): del self._foo
 
-See **register_observer** for the observer (client) side of things.
+See [add_observer](#add_observer) for the observer (client) side of things.
 '''
 __all__ = ['Observable','observed','add_observer','remove_all_observers','make_observable']
 
