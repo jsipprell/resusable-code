@@ -145,6 +145,8 @@ def describe_class(cls,output,level=1):
         output.append(indent+'%s(%s): ' % (sym,','.join(argdesc)))
     if doc:
       output.extend(doc_strip(doc,indent))
+    else:
+      output.append('')
   return len(output) - start
 
 def dump_docs(dir,doc='README.md',modules=None):

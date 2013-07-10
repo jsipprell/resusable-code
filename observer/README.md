@@ -61,6 +61,7 @@ See the observer module documentation.
 
   **\_\_init\_\_(cls,name,bases,dct)**:
 
+
 add\_observer
 ============
 (*function*)
@@ -146,8 +147,11 @@ being usable for both getting (singular usage) and optionally setting and deleti
 but they notify any registered observers when get, set or delete happens.
 
   **deleter(self,func)**:
+
   **setter(self,func)**:
+
   **\_\_init\_\_(self,fget=None,fset=None,fdel=None,doc=None)**:
+
 
 remove\_all\_observers
 ====================
