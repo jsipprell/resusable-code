@@ -163,9 +163,8 @@ def dump_docs(dir,doc='README.md',modules=None):
       print 'generating docs for %s' % os.path.join(dir,module_files[module])
       if i > 0:
         output.append('-----')
-      if len(modules) > 1:
-        output.append('****%s****' % module)
-        output.append('=' * (len(module)+8))
+      output.append('***%s***' % module)
+      output.append('=' * len(module))
 
       m = importlib.import_module(module)
       if hasattr(m,'__all__'):

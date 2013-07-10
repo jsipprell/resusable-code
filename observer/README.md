@@ -1,3 +1,5 @@
+***observer***
+========
 Implementation of an 'observer protocol' for python.
 
 This protocol allows objects to use *observable* properties (via an `@observed` decorator).
