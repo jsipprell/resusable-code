@@ -117,15 +117,18 @@ class _CallbackWrapper(object):
   def __str__(self):
     return self.property
 
+  def __repr__(self):
+    return '<Wrapper %r>' % repr(self._func)
+
   def __hash__(self):
     if self._h is None:
-      self._h = hash(self.property)
+      self._h = hash(self.property) + hash(self._func)
     return self._h
 
   def __eq__(self,ob):
     if isinstance(ob,_CallbackWrapper):
-      return self.property == ob.property
-    return self.property == ob
+      return self.property == ob.property and self._func == ob._func
+    return self._func == ob
 
   def clone(self):
     return type(self)(self.property,self.type,self.use_thread,self._func)
@@ -254,7 +257,6 @@ def _observe_callback(observed,key,type,name,ob,*args):
   for observer in observed[key][type].itervalues():
       for o in observer:
         property = name or o.property
-        #print 'PROPERTY',repr(property)
         if o.use_thread:
           t = Thread(target=o,name='%s_%s_observer' % (property,type),args=(property,ob)+args)
           t.setDaemon(True)
