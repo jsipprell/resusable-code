@@ -1,0 +1,499 @@
+#!/bin/bash
+#
+# Functions for use only on mi linux servers
+
+# Use private library path on x86_64 to pick up 32-bit libs
+if [ x"$LD_LIBRARY_PATH" = x"" ]; then
+  libdir=`eval 'echo ~/lib'`
+  if [ x"`arch`" = x"x86_64" ]; then
+    lib64dir=`eval 'echo ~/lib64'`
+  else
+    lib64dir=
+  fi
+  if [ -d "$libdir" ]; then
+    export LD_LIBRARY_PATH="$libdir"
+  fi
+  if [ x"$lib64dir" != x"" ]; then
+    if [ -d "$lib64dir" ]; then
+      export LD_LIBRARY_PATH="$LD_LIBRARY_PATH${LD_LIBRARY_PATH:+ }$lib64dir"
+    fi
+  fi
+  unset libdir
+  unset lib64dir
+fi
+
+function check_tmux() {
+  local tmux="${TMUX_EXECUTABLE:-/usr/bin/tmux}"
+  [[ -x "$tmux" ]] && {
+    "$tmux" has-session >/dev/null 2>&1
+  } || /bin/false
+}
+
+# Return only tmux procs with no tty owned by the current user
+function _pidof_tmux_daemon() {
+  local uid=$(id -u)
+  local pids=$(pgrep -U $uid -x tmux)
+  local -i rc=$?
+
+  if [ $rc -eq 0 ]; then
+    rc=1
+    for pid in $pids; do
+      if [ "$(ps -o tt= $pid)" = '?' ]; then
+        echo $pid
+        rc=0
+      fi
+    done
+  fi
+
+  return $rc
+}
+
+function tmux() {
+  if [ -f ~/.ssh/tmux-environment ]; then
+    . ~/.ssh/tmux-environment
+  fi
+
+  local tmux="${TMUX_EXECUTABLE:-/usr/bin/tmux}"
+  local -i rc=0
+  local v=
+
+  if [ ! -x "$tmux" ]; then
+    echo "tmux not installed on $(hostname)." >&2
+    return 1
+  fi
+  
+  if [ $# -gt 0 ]; then
+    "$tmux" "$@"; return $?
+  fi
+
+  if [[ $TMUX_HOST ]] && [[ $TMUX_HOST = $(hostname) ]]; then
+    if ! check_tmux; then
+      if [ -f ~/.ssh/tmux-environment ]; then
+        sed -e 's/^\([A-Z_]\+\)=.*/\1/' < ~/.ssh/tmux-environment | \
+          while read v; do unset -v $v; done
+        rm ~/.ssh/tmux-environment
+      fi
+    fi
+  elif [[ $TMUX_HOST ]] && [[ $TMUX_HOST != $(hostname) ]]; then
+    echo "tmux: your origin tmux host for this cluster is '$TMUX_HOST'."
+    return 0
+  elif [ -n "$TMUX" -a \( ! -S "${TMUX%%,*}" -o -n "$TMUX_PANE" \) ]; then
+    echo "tmux: you're doing it wrong"
+    return 1
+  fi
+
+  local agent="${TMUX_AGENT}"
+  if [[ ! $agent ]] && klist -s >/dev/null 2>&1; then
+    agent=none
+  fi
+  if [[ $agent != 'none' ]]; then
+    agent="${TMUX_AGENT:-agent}"
+    agent_login || $agent
+  fi
+
+  if "$tmux" has-session 2>/dev/null; then
+    "$tmux" attach; rc=$?
+  else
+    "$tmux"; rc=$?
+    rm -f ~/.ssh/tmux-environment
+  fi
+
+  return $rc
+}
+
+function tmux_reset() {
+  if [ -f ~/.ssh/tmux-environment ]; then
+    . ~/.ssh/tmux-environment
+  fi
+
+  if [[ $TMUX_HOST ]] && [[ $TMUX_HOST != $(hostname) ]] && [[ $1 != '--force' ]]; then
+    echo "tmux was started on $TMUX_HOST, run tmux_reset there or use --force" >&2
+    return 1
+  fi
+  
+  unset TMUX_HOST
+  unset TMUX
+  unset TMUX_PANE
+  unset TMUX_AGENT
+  kill $(pgrep -U $uid -x tmux)
+}
+
+# sourced bash functions to continously mantain an ssh environment once started
+SSH_ENV=~/.ssh/environment.$(hostname)
+
+check_agent() {
+  local -i pid=0
+  local arg
+  local print=
+
+  for arg; do
+    if echo "$arg" | grep -qe '^[1-9][0-9]*\+$'; then
+      let pid=arg
+    else
+      case "$arg" in
+        --print|-p)
+          print=yes
+          ;;
+        *)
+          ;;
+      esac
+    fi
+  done
+
+  if [[ $pid -eq 0 ]]; then
+    let pid=SSH_AGENT_PID
+  fi
+  
+  if [[ $pid -gt 0 ]] && kill -0 $pid 2>/dev/null; then
+    [[ $print ]] && echo $pid
+    return 0
+  fi
+  return 1
+}
+
+agent_login() {
+  if [ -f "$SSH_ENV" ]; then
+    . "$SSH_ENV"
+    if ! check_agent "$@"; then
+      agent
+    fi
+  else
+    false
+  fi
+}
+
+agent() {
+  local agent_pids
+
+  echo -n "Looking for ssh agent: "
+  if [ -f "$SSH_ENV" ]; then
+    . "$SSH_ENV"
+    if check_agent --print; then
+      return 0
+    fi
+    rm -f "$SSH_ENV"
+  fi
+  echo "not running"
+  echo -n "Starting new ssh agent: "
+
+  agent_pids=$(pgrep -U $(id -u) ssh-agent)
+  for pid in $agent_pids; do
+    if check_agent $pid; then
+      SSH_AGENT_PID=$pid ssh-agent -k >/dev/null 2>&1
+    fi
+  done
+
+  ssh-agent | sed -e 's/^echo/#echo/' > "$SSH_ENV"
+  if [ $? -eq 0 ]; then
+    chmod 0600 "$SSH_ENV"
+    . "$SSH_ENV"
+    echo "$SSH_AGENT_PID"
+    ssh-add
+    return 0
+  else
+    rm -f "$SSH_ENV" ||:
+  fi
+  echo "failed"
+  return 1
+}
+
+agent_logout() {
+  local -i rc=0
+  local agent_pids
+
+  if [ -f "$SSH_ENV" ]; then
+    echo -n "Stopping ssh agent: "
+    . "$SSH_ENV"
+    rm -f "$SSH_ENV" ||:
+    if check_agent; then
+      echo -n "$SSH_AGENT_PID "
+      ssh-agent -k >/dev/null 2>&1
+      let rc+=$?
+    fi
+    echo
+  fi
+
+  agent_pids=$(pgrep -U $(id -u) ssh-agent)
+  for pid in $agent_pids; do
+    if check_agent $pid; then
+      echo "Killed over ssh-agent process: $pid"
+      SSH_AGENT_PID=$pid ssh-agent -k >/dev/null 2>&1
+      let rc+=$?
+    fi
+  done
+  return $rc
+}
+
+stop_agent() {
+  agent_logout "$@"
+}
+
+gagent() {
+  local pid=$(pidof -P1 -U $(id -u) gpg-agent 2>/dev/null)
+  if [[ $pid ]]; then
+    echo "gpg-agent already running: $pid" >&2
+  else
+    eval `gpg-agent`
+  fi
+}
+
+ksudo_kinit() {
+  klist -s >/dev/null && return 0
+
+  local target="$1"; shift
+  local user="$1"; shift
+
+  if [[ ! $user ]]; then
+    if [[ $target ]]; then
+      user="$target"
+      target=
+    else
+      user="$(id -un)"
+    fi
+  fi
+
+  [[ $target ]] && user+="/$target"
+  kinit "$user" "$@"
+}
+
+ksudo_get_creds() {
+  local creds=
+  if [[ $KRB5CCNAME ]] && [[ ${KRB5CCNAME#DIR:} != $KRB5CCNAME ]]; then
+    local d="${KRB5CCNAME#DIR:*}"
+
+    if [[ -f $d/primary ]]; then
+      creds="$d/$(cat $d/primary)"
+      [[ -f $creds ]] && creds="FILE:$creds"
+    fi
+  fi
+  if [[ $creds ]] || [[ $KRB5CCNAME ]]; then
+    echo "${creds:-$KRB5CCNAME}"
+  fi
+}
+
+nsudo() {
+  local krbsu=$(/usr/bin/which --skip-alias --skip-functions ksu)
+  local user=nmapp
+  local -a args=()
+  
+  if [ "$1" = "+" ]; then
+    shift
+    if [ $# -eq 0 ]; then
+      ksudo_kinit || return $?
+
+      KRB5CCNAME=$(ksudo_get_creds) $krbsu "$user" -a -i -l
+      return $?
+    fi
+    if [ $# -gt 2 -a "$1" = "-" ]; then
+      args+=('-a' '-i' '-l')
+      shift
+      user="$1"
+      shift
+    elif [ $# -ge 1 -a "${1#-}" = "$1" ]; then
+      user="$1"
+      shift
+      if [ $# -gt 0 ]; then
+        args+=('-e' "$*")
+        set --
+      else
+        args+=('-a' '-i' '-l')
+      fi
+    fi
+    ksudo_kinit || $?
+    KRB5CCNAME=$(ksudo_get_creds) $krbsu "$user" "${args[@]}" "$@"
+  else
+    if [ $# -eq 0 ]; then
+      echo "Usage: nsudo [-u user]] cmd | shell args" >&2
+      return 2
+    fi
+    while [[ $# -gt 0 ]]; do
+      local quiet=1
+      case "$1" in
+        -u)
+          shift
+          user="$1"
+          shift
+          ;;
+        -v)
+          quiet=
+          ;;
+        --)
+          shift
+          break
+          ;;
+        -*) 
+          args+=("$1")
+          ;;
+        *) 
+          break
+          ;;
+      esac
+      args+=("$1")
+      shift
+    done
+    if [ x"$quiet" != x"" ]; then
+      args+=('-q')
+    fi
+    ksudo_kinit || return $?
+    KRB5CCNAME=$(ksudo_get_creds) $krbsu "$user" "${args[@]}" -a -c "$*"
+  fi
+}
+
+
+# stupid ksu cannot deal with ccache using the DIR system (collections)
+ksu() {
+  local bin_ksu=$(which --skip-alias --skip-functions ksu)
+
+  if [[ $KRB5CCNAME ]] && [[ ${KRB5CCNAME#DIR:} != $KRB5CCNAME ]]; then
+    local d="${KRB5CCNAME#DIR:*}"
+    local creds=
+
+    if [[ -f $d/primary ]]; then
+      creds="$d/$(cat $d/primary)"
+      [[ -f $creds ]] && export KRB5CCNAME="FILE:$creds"
+    fi
+  fi
+
+  "$bin_ksu" "$@"
+}
+
+_kerberos_make_new_creds_dir() {
+  local creds="$1/krb5cc.${2:-$UID}"
+  if [[ ! -d $creds ]]; then
+    mkdir -p "$creds" && chmod 0700 "$creds" && \
+      echo "$creds" && return 0
+      return 1
+  else
+    echo "$creds"
+  fi
+}
+
+_kerberos_make_new_creds_file() {
+  local creds="$1/krb5cc.${2:-$UID}"
+
+  while [[ -e $creds ]] && [[ ! -d $creds ]]; do
+    creds="$(mktemp -u ${creds}_XXXXXX)"
+  done
+  echo $creds
+}
+
+_kerberos_move_credentials() {
+  local cur_creds="$1"
+  local new_creds="$2"
+  local primary=
+  local target=
+
+  if [[ -f $cur_creds ]]; then
+    primary='tkt'
+    target="$new_creds/$primary"
+    while [[ -e $target ]]; do
+      target="$(mktemp -u ${target}XXXXXX)"
+      primary=
+    done
+    mv "$cur_creds" "$target" && primary=$(basename $target)
+  elif [[ -d $cur_creds ]]; then
+    local cred
+    primary='tkt'
+    for cred in "$cur_creds"/tkt*; do
+      target="$new_creds/$(basename $cred)"
+      while [[ -e $target ]]; do
+        target="$(mktemp -u ${target}XXXXXX)"
+      done
+      mv "$cred" "$target"
+      [[ $(basename $target) = $primary ]]  && \
+             [[ ! -s $new_creds/primary ]] && {
+        echo "$primary" > "$new_creds/primary"
+      }
+    done
+    rm -rf "$cur_creds" ||:
+    primary=
+  fi
+  
+  if [[ $primary ]]; then
+    echo "$primary" > "$new_creds/primary"
+  fi
+}
+
+#####
+# Kerberos login credential cache management.
+# Usage: eval `kerberos_login`
+#
+#   Or if you want to use some other directory than /nm/local/var/tmp/krb5cc.$(YOU):
+#
+# eval `kerberos_login /some/other/private/directory`
+#      (w/ this usage the dir must already exist)
+#####
+kerberos_login() {
+  [[ ! -r /etc/redhat-release ]] && { echo true; return 0; }
+  local id=$(id -un)
+  local creds_dir=
+  local -a rh=($(sed -r -e 's@.*([[:digit:]]+)\.([[:digit:]]+).*@\1 \2@' /etc/redhat-release 2>/dev/null))
+
+  if [[ -d /nm/local/var/tmp ]]; then
+    creds_dir="${1:-/nm/local/var/tmp}"
+  else
+    creds_dir="${1:-/var/tmp}"
+  fi
+
+  if [[ ! $KRB5CCNAME ]]; then
+    if [[ ${rh[0]} -ge 6 ]]; then
+      if [[ $# -gt 0 ]] && [[ -d $creds_dir ]]; then
+        chmod 0700 "$creds_dir" && \
+          echo "export KRB5CCNAME='DIR:$creds_dir'" || \
+          echo "true"
+        return 0
+      fi
+      creds_dir=$(_kerberos_make_new_creds_dir $creds_dir $id)
+      [[ $creds_dir ]] && echo "export KRB5CCNAME='DIR:$creds_dir'" || echo true
+      return 0
+    else
+      KRB5CCNAME=$(_kerberos_make_new_creds_file $creds_dir)
+      echo "export KRB5CCNAME='FILE:$KRB5CCNAME'"
+      return 0
+    fi
+  else
+    local cur_creds="${KRB5CCNAME#FILE:}"
+    [[ $cur_creds = $KRB5CCNAME ]] && cur_creds="${KRB5CCNAME#DIR:}"
+    local new_creds="$cur_creds"
+    if [[ $cur_creds != $KR5BCCNAME ]] && [[ ${cur_creds#/tmp} != $cur_creds ]]; then
+      if [[ ${rh[0]} -ge 6 ]]; then
+        new_creds=$(_kerberos_make_new_creds_dir $creds_dir $id)
+      elif [[ -f $cur_creds ]]; then
+        new_creds=$(_kerberos_make_new_creds_file $creds_dir)
+      fi
+    fi
+    if [[ $new_creds ]] && [[ $new_creds != $cur_creds ]]; then
+      if [[ -d $new_creds ]]; then
+        _kerberos_move_credentials "$cur_creds" "$new_creds" && \
+          echo "export KRB5CCNAME='DIR:$new_creds'" && return 0
+      elif [[ -f $cur_creds ]]; then
+        mv "$cur_creds" "$new_creds" && \
+          echo "export KRB5CCNAME='FILE:$new_creds'" && return 0
+      else
+        echo "export KRB5CCNAME='FILE:$new_creds'"
+        return 0
+      fi
+    fi
+  fi
+  echo "true"
+}
+
+if [ -z "$BASH_COMPLETION" -a -z "$BASH_COMPLETION_DIR" ]; then
+  export BASH_COMPLETION_DIR=~/.bash_completion.d
+fi
+
+if [ -n "$BASH_COMPLETION_DIR" -a -z "$BASH_COMPLETION" ]; then
+  if [ -d $BASH_COMPLETION_DIR -a -x $BASH_COMPLETION_DIR ]; then
+    for i  in $BASH_COMPLETION_DIR/*; do
+      [[ ${i##*/} != @(*~|*.bak|*.swp|\#*\#|*.pkg*|.rpm**|*.no) ]] &&
+        [ \( -f $i -o -h $i \) -a -r $i ] && . $i
+    done
+  else
+    unset BASH_COMPLETION_DIR
+  fi
+  unset i
+fi
+
+if declare -F __git_ps1 >/dev/null 2>&1; then
+  export PS1='[\u@\h \W$(__git_ps1 " (%s)")]\$ '
+fi

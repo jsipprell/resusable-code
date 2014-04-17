@@ -18,3 +18,19 @@ A quick little context manager I wrote for python 2.6+; *to use*:
 
     except timer.TimerExpired, e:
       print 'execution expired after %s seconds' % e.elapsed
+
+## bash ##
+
+Function library I've built over the ages. To use simply add he following to
+your ~/.bash_profile:
+
+    if [ -f ~/.bash_functions ]; then
+        . ~/.bash_functions
+    fi
+    
+    uname=$(uname -s | tr A-Z a-z)
+    if [ -f ~/".bash_functions_$uname" ]; then
+        . ~/".bash_functions_$uname"
+    fi
+    unset uname
+

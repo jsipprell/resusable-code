@@ -1,0 +1,35 @@
+_kdestroy_matching() {
+  local princ="${1:-[[:alpha:]]+.*@[[:alpha:]]+.*}"
+  local pat="^([[:space:]]+|\*)[[:space:]]*$princ"
+  local cache=
+
+  if [[ $2 = 'expired' ]]; then
+    pat+="Expired"
+  fi
+
+  for cache in $(klist -l | /usr/bin/egrep "$pat" | awk '-F[[:space:]]{3,}' '{if(NF=3)print$2;}'); do
+    [[ $cache ]] && kdestroy -c "API:$cache"
+  done
+}
+
+kdest() {
+  local arg
+  if [[ $# -eq 0 ]]; then
+    _kdestroy_matching '' expired
+    return $?
+  fi
+  for arg; do
+    if [[ ${arg#@} != $arg ]]; then
+      local realm=$(echo "$arg" | tr a-z A-Z)
+      _kdestroy_matching "[[:alpha:]]+.*$realm.*" || return $?
+    else
+      _kdestroy_matching "$arg.*@[[:alpha:]]+.*" || return $?
+    fi
+  done
+}
+
+if declare -F __git_ps1 >/dev/null 2>&1; then
+  export PS1='[\u@\h \W$(__git_ps1 " (%s)")]\$ '
+fi
+
+source `brew --repository`/Library/Contributions/brew_bash_completion.sh
